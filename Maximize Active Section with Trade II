@@ -1,0 +1,156 @@
+import java.util.*;
+
+class Solution {
+    // Helper class to store contiguous '0' blocks
+    static class Group {
+        int start;
+        int end;
+        int length;
+
+        Group(int start, int end, int length) {
+            this.start = start;
+            this.end = end;
+            this.length = length;
+        }
+    }
+
+    // Sparse Table for Range Maximum Queries (O(1) query time)
+    static class SparseTable {
+        private final int[][] st;
+
+        public SparseTable(int[] nums) {
+            int n = nums.length;
+            if (n == 0) {
+                st = new int[0][0];
+                return;
+            }
+            int k = bitLength(n);
+            st = new int[k][n];
+
+            for (int j = 0; j < n; j++) {
+                st[0][j] = nums[j];
+            }
+
+            for (int i = 1; i < k; i++) {
+                for (int j = 0; j + (1 << i) <= n; j++) {
+                    st[i][j] = Math.max(st[i - 1][j], st[i - 1][j + (1 << (i - 1))]);
+                }
+            }
+        }
+
+        public int query(int l, int r) {
+            if (l > r) return 0;
+            int i = bitLength(r - l + 1) - 1;
+            return Math.max(st[i][l], st[i][r - (1 << i) + 1]);
+        }
+
+        private int bitLength(int n) {
+            return Integer.SIZE - Integer.numberOfLeadingZeros(n);
+        }
+    }
+
+    public List<Integer> maxActiveSectionsAfterTrade(String s, int[][] queries) {
+        int n = s.length();
+
+        // 1. Count total original '1's in the full string s
+        int totalOnesInS = 0;
+        for (int i = 0; i < n; i++) {
+            if (s.charAt(i) == '1') totalOnesInS++;
+        }
+
+        // 2. Identify contiguous '0' groups and track last zero group index for each position
+        List<Group> zeroGroups = new ArrayList<>();
+        int[] zeroGroupIndex = new int[n];
+        int[] lastZeroGroupIndex = new int[n];
+        Arrays.fill(zeroGroupIndex, -1);
+        Arrays.fill(lastZeroGroupIndex, -1);
+
+        int lastGroup = -1;
+        for (int i = 0; i < n; i++) {
+            if (s.charAt(i) == '0') {
+                if (i > 0 && s.charAt(i - 1) == '0') {
+                    Group cur = zeroGroups.get(zeroGroups.size() - 1);
+                    cur.end = i;
+                    cur.length++;
+                } else {
+                    zeroGroups.add(new Group(i, i, 1));
+                    lastGroup = zeroGroups.size() - 1;
+                }
+                zeroGroupIndex[i] = lastGroup;
+            }
+            lastZeroGroupIndex[i] = lastGroup;
+        }
+
+        int numGroups = zeroGroups.size();
+        int[] adjacentSums = new int[Math.max(0, numGroups - 1)];
+
+        for (int i = 0; i < numGroups - 1; i++) {
+            adjacentSums[i] = zeroGroups.get(i).length + zeroGroups.get(i + 1).length;
+        }
+
+        SparseTable st = new SparseTable(adjacentSums);
+        List<Integer> ans = new ArrayList<>(queries.length);
+
+        for (int[] query : queries) {
+            int l = query[0];
+            int r = query[1];
+
+            int activeSections = totalOnesInS;
+
+            int gL = zeroGroupIndex[l];
+            int gR = zeroGroupIndex[r];
+
+            // Same zero group range case
+            if (gL != -1 && gL == gR) {
+                ans.add(activeSections);
+                continue;
+            }
+
+            // Calculate truncated zero group lengths at boundaries l and r
+            int left = (s.charAt(l) == '0') ? (zeroGroups.get(gL).end - l + 1) : 0;
+            int right = (s.charAt(r) == '0') ? (r - zeroGroups.get(gR).start + 1) : 0;
+
+            // Case 1: l and r cut across two adjacent zero groups directly
+            if (s.charAt(l) == '0' && s.charAt(r) == '0' && gL + 1 == gR) {
+                activeSections = Math.max(activeSections, totalOnesInS + left + right);
+            }
+
+            // Find range of fully contained zero groups inside [l, r]
+            int startGroupIndex;
+            if (s.charAt(l) == '0') {
+                startGroupIndex = (zeroGroups.get(gL).start == l) ? gL : gL + 1;
+            } else {
+                int lastBeforeL = lastZeroGroupIndex[l];
+                startGroupIndex = lastBeforeL + 1;
+            }
+
+            int endGroupIndex;
+            if (s.charAt(r) == '0') {
+                endGroupIndex = (zeroGroups.get(gR).end == r) ? gR : gR - 1;
+            } else {
+                endGroupIndex = lastZeroGroupIndex[r];
+            }
+
+            // Case 2: RMQ on adjacent full zero groups
+            int startAdj = startGroupIndex;
+            int endAdj = endGroupIndex - 1;
+            if (startAdj <= endAdj) {
+                activeSections = Math.max(activeSections, totalOnesInS + st.query(startAdj, endAdj));
+            }
+
+            // Case 3: Truncated left group + full adjacent right group
+            if (s.charAt(l) == '0' && gL + 1 <= endGroupIndex) {
+                activeSections = Math.max(activeSections, totalOnesInS + left + zeroGroups.get(gL + 1).length);
+            }
+
+            // Case 4: Full adjacent left group + truncated right group
+            if (s.charAt(r) == '0' && gR - 1 >= startGroupIndex) {
+                activeSections = Math.max(activeSections, totalOnesInS + right + zeroGroups.get(gR - 1).length);
+            }
+
+            ans.add(activeSections);
+        }
+
+        return ans;
+    }
+}
