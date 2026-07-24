@@ -1,0 +1,47 @@
+class Solution {
+    public int uniqueXorTriplets(int[] nums) {
+        final int MAX = 2048;
+
+        boolean[][] dp = new boolean[4][MAX];
+        dp[0][0] = true;
+
+        for (int v : nums) {
+            boolean[][] next = new boolean[4][MAX];
+
+            // Copy existing states
+            for (int len = 0; len <= 3; len++) {
+                System.arraycopy(dp[len], 0, next[len], 0, MAX);
+            }
+
+            for (int len = 0; len <= 3; len++) {
+                for (int xor = 0; xor < MAX; xor++) {
+                    if (!dp[len][xor]) continue;
+
+                    // Take this value once
+                    if (len + 1 <= 3) {
+                        next[len + 1][xor ^ v] = true;
+                    }
+
+                    // Take this value twice
+                    if (len + 2 <= 3) {
+                        next[len + 2][xor] = true;
+                    }
+
+                    // Take this value three times
+                    if (len + 3 <= 3) {
+                        next[len + 3][xor ^ v] = true;
+                    }
+                }
+            }
+
+            dp = next;
+        }
+
+        int ans = 0;
+        for (int xor = 0; xor < MAX; xor++) {
+            if (dp[3][xor]) ans++;
+        }
+
+        return ans;
+    }
+}
